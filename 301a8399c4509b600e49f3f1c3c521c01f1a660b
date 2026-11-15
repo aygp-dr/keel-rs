@@ -1,0 +1,26 @@
+Timeline
+- Read spec.org's Requirements table first so the crate matches R-K-01,
+  R-K-03, R-K-04 and R-H-02 rather than inventing a kernel shape.
+- Failure: three tests failed on the first run (sp@, um*, um/mod) with
+  their stacks reversed. One cause: Vm::stack() walked the region from
+  the top down, which already yields bottom-first because the stack
+  grows down, then reversed it. Removed the reverse.
+- Failure: two keel-wasm tests panicked inside wasm-bindgen. JsValue
+  only exists on a wasm target and panics when touched natively, so the
+  assertions now check keel::Error's Display instead.
+- Backed out a license = "MIT" field added without being asked;
+  forth-keel carries no LICENSE either, so the choice stays the
+  owner's.
+- clippy wanted is_multiple_of, which needs Rust 1.87; kept % CELL with
+  an allow and declared rust-version 1.74 so collaborators on older
+  toolchains can still build.
+
+Reproduction
+- Command: cargo test --all; cargo fmt --all --check;
+  cargo clippy --all-targets; cargo build -p keel-wasm --target
+  wasm32-unknown-unknown
+- Output: 4 + 17 + 5 = 26 tests pass, 0 failed; fmt clean; clippy 0
+  warnings; keel_wasm.wasm 1640676 bytes produced.
+- Cell: nexus, FreeBSD 15.1-RELEASE amd64, rustc/cargo 1.94.0 from the
+  FreeBSD package (no rustup; the package bundles the
+  wasm32-unknown-unknown target), node v24.14.1.
