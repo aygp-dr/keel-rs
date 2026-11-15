@@ -1,0 +1,167 @@
+#+title: SICP 1.1 against the keel kernel
+#+property: header-args:keel :results value
+
+This is the Emacs answer to the WAForth VS Code extension's =.wafnb=
+notebook: Org Babel, which Emacs already has. Evaluate a block with
+=C-c C-c=.
+
+Unlike that extension's notebook controllers, which are constructed
+stateless and give every cell a fresh kernel, the kernel here is one
+session shared by every block, by =M-x keel-repl= and by every
+=keel-eval-= command. A Forth stack you cannot carry between blocks is
+not much of a Forth stack. Use =:reset yes= on a block that wants to
+start clean.
+
+#+begin_src emacs-lisp :results silent
+  (add-to-list 'load-path (expand-file-name ".." default-directory))
+  (require 'ob-keel)
+  (org-babel-do-load-languages 'org-babel-load-languages
+                               '((keel . t) (emacs-lisp . t)))
+#+end_src
+
+* 1.1.1 Expressions
+
+Scheme's prefix combination is Forth's postfix. =(+ 137 349)=:
+
+#+begin_src keel :reset yes
+  137 349 +
+#+end_src
+
+#+RESULTS:
+| 486 |
+
+=(+ 21 35 12 7)=. Scheme's variadic =+= becomes a fold; the stack is
+the argument list.
+
+#+begin_src keel :reset yes
+  21 35 + 12 + 7 +
+#+end_src
+
+#+RESULTS:
+| 75 |
+
+* 1.1.1 Nesting
+
+=(+ (* 2 4) (+ 3 5))=. There is no =*=; =um*= leaves a double-cell
+product =( lo hi )=, and for a product that fits in one cell the high
+cell is zero, so =um* += adds that zero back and leaves the low cell.
+
+#+begin_src keel :reset yes
+  2 4 um* + 3 5 + +
+#+end_src
+
+#+RESULTS:
+| 16 |
+
+* Subtraction, derived
+
+=(- 1000 334)=. No =-=, no =negate=, no =dup=. =sp@ @= duplicates the
+top of stack, =nand= with itself inverts it, =1 += completes the two's
+complement negation, and =+= subtracts.
+
+#+begin_src keel :reset yes
+  1000 334 sp@ @ nand 1 + +
+#+end_src
+
+#+RESULTS:
+| 666 |
+
+* Division
+
+=um/mod= is =( ud-lo ud-hi u -- u-rem u-quot )=, so push the numerator,
+then =0= for its high cell, then the divisor. =(/ (+ 5 (* 2 4)) (+ 3 (-
+6 2)))= is 13/7: remainder 6, quotient 1.
+
+#+begin_src keel :reset yes
+  5 2 4 um* + + 0 3 6 2 sp@ @ nand 1 + + + um/mod
+#+end_src
+
+#+RESULTS:
+| 6 | 1 |
+
+* Output
+
+=emit= appends a byte to the kernel's output. Ask for =:results output=
+to collect it instead of the stack.
+
+#+begin_src keel :reset yes :results output
+  72 101 108 108 111 emit emit emit emit emit
+#+end_src
+
+#+RESULTS:
+: olleH
+
+Note the order: =emit= takes the top of stack, so five pushes followed
+by five =emit=s print backwards. Getting "Hello" out needs the bytes
+emitted as they are pushed:
+
+#+begin_src keel :reset yes :results output
+  72 emit 101 emit 108 emit 108 emit 111 emit
+#+end_src
+
+#+RESULTS:
+: Hello
+
+* 1.1.4 Compound procedures
+
+=(define (square x) (* x x))= cannot be written as =: square sp@ @ um* + ;=:
+a colon definition needs the outer interpreter, which is a frames word
+and arrives at milestone M4. Try it and the evaluator says so:
+
+#+begin_src keel :reset yes
+  : square sp@ @ um* + ;
+#+end_src
+
+What *does* work is the kernel-level equivalent --- compile the thread
+by hand, then reach it through =execute=. The xts are =sp@ @ um* +=,
+which is =2 0 11 5=; =exit= is appended for you.
+
+#+begin_src emacs-lisp
+  (keel-reset)
+  (setq sicp-square (keel-compile-thread (list 2 0 11 5)))
+  (keel-push 5)
+  (keel-push sicp-square)
+  (alist-get 'stack (keel-eval-string "execute"))
+#+end_src
+
+#+RESULTS:
+| 25 |
+
+Called again on a different argument, through the same body address:
+
+#+begin_src emacs-lisp
+  (keel-reset)
+  (let ((square (keel-compile-thread (list 2 0 11 5))))
+    (mapcar (lambda (n)
+              (keel-push n)
+              (keel-push square)
+              (keel-eval-string "execute")
+              (keel-pop))
+            '(1 2 3 4 5 10 21)))
+#+end_src
+
+#+RESULTS:
+| 1 | 4 | 9 | 16 | 25 | 100 | 441 |
+
+Note that =keel-reset= is called once, *before* compiling, and never
+inside the loop: =reset= rewinds HERE to the start of the dictionary,
+which invalidates every body address compiled before it. Resetting
+between calls would leave =square= pointing at cells the next
+compilation overwrites. That is the kernel's own =reset= semantics, not
+a choice made here.
+
+So a compound procedure exists --- a body address, reached through
+=execute=. What is missing is the *name* and the parser that would bind
+it. That is the whole of milestone M4.
+
+* Where SICP 1.1 stops
+
+| SICP                            | needs                                                  |
+|---------------------------------+--------------------------------------------------------|
+| =(define (square x) ...)=       | the outer interpreter: a name and a colon compiler     |
+| =(define (abs x) (cond ...))=   | branching; the frames layer builds IF from =execute=   |
+| =(define (factorial n) ...)=    | recursion, so a named definition that can call itself  |
+| 1.1.7 =sqrt= by Newton's method | IF, recursion, and a signed =/=                        |
+
+None of that is missing from this Emacs package. It is missing from the
+kernel, on purpose, until the frames layer lands.
