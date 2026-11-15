@@ -1,0 +1,14 @@
+[package]
+name = "keel-wasm"
+description = "wasm-bindgen shim exposing the keel to JavaScript hosts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+keel = { path = "../keel" }
+wasm-bindgen = "0.2"

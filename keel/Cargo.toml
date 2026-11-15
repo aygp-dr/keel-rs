@@ -1,0 +1,9 @@
+[package]
+name = "keel"
+description = "The forth-keel kernel: one linear memory, two stacks, 13 primitives, and the NEXT inner interpreter."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]

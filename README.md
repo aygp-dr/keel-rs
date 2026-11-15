@@ -1,0 +1,99 @@
+# keel-rs
+
+[![ci](https://github.com/aygp-dr/keel-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/aygp-dr/keel-rs/actions/workflows/ci.yml)
+[![milestone M2](https://img.shields.io/badge/milestone-M2%20native-blue)](https://github.com/aygp-dr/forth-keel)
+[![primitives 13](https://img.shields.io/badge/primitives-13-informational)](#the-thirteen-primitives)
+[![cell 32-bit](https://img.shields.io/badge/cell-32--bit-informational)](#cells)
+[![rust 1.74+](https://img.shields.io/badge/rust-1.74%2B-orange)](#building)
+
+The Rust **keel** for [forth-keel](https://github.com/aygp-dr/forth-keel): the
+bottom layer of a Forth system built in three layers, each written on top of
+the one below. The keel is the only part written in a host language. Everything
+above it — `frames` (stack words, arithmetic, control flow, compiler, outer
+interpreter) and `planking` (tagged cells, pairs, symbols, closures, promises,
+Cheney GC, reader) — is written in Forth on top of these thirteen primitives.
+
+The governing specification lives in
+[forth-keel/spec.org](https://github.com/aygp-dr/forth-keel/blob/main/spec.org).
+Requirement IDs quoted below (`R-K-01`, …) are defined there, and the tests in
+this repository are named after them.
+
+| Crate | What it is | Gate |
+|-------|------------|------|
+| [`keel/`](keel/) | The kernel: memory, two stacks, 13 primitives, NEXT inner interpreter | `cargo test` (M2) |
+| [`keel-wasm/`](keel-wasm/) | wasm-bindgen shim for JavaScript hosts | `cargo build --target wasm32-unknown-unknown` (M4) |
+
+## The thirteen primitives
+
+R-K-01 fixes the set exactly. Nothing may be added to it; every other Forth word
+is derived from these, in Forth:
+
+```
+@  !  sp@  rp@  0=  +  nand  exit  key  emit  execute  um*  um/mod
+```
+
+`nand` is the only logical primitive — `invert`, `and`, `or` and `negate` are
+all derived from it. `sp@` yields the address holding the former top of stack,
+which is what makes `dup` definable as `sp@ @`.
+
+## Cells
+
+R-K-03: cells are at least 32 bits, and the oracle corpus assumes no more than
+32. So a cell here is exactly `i32` on every host, which keeps results identical
+between this kernel and a 32-bit wasm host.
+
+## Memory
+
+R-K-04: one linear, byte-addressed region, in the order the spec's memory map
+gives, every boundary cell-aligned:
+
+```
+system variables | TIB | dictionary -> | from-space | to-space | <- data stack | <- return stack
+```
+
+Both stacks grow down. The two semispaces are equal in size, for the copying
+collector that `planking` will add at M8.
+
+## Building
+
+```sh
+cargo test --all                                      # native, M2
+cargo build -p keel-wasm --target wasm32-unknown-unknown   # wasm32, M4
+cargo fmt --all --check && cargo clippy --all-targets -- -D warnings
+```
+
+Requires Rust 1.74+. For the wasm target: `rustup target add
+wasm32-unknown-unknown` (the FreeBSD `rust` package already bundles it, so
+`rustup` is not needed there). CI runs all of the above on every push.
+
+## What is not here yet
+
+There is deliberately **no text interpreter and no `interpret` export.** Turning
+Forth *source* into execution tokens is the outer interpreter, which is a
+`frames` word written in Forth on top of this kernel, and it arrives with M3/M4.
+Until then a host drives the kernel directly: look up primitive tokens by name,
+`compile` a thread of them, and `run` it.
+
+This means R-H-02 (the wasm keel exports `new`, `interpret`, `push`, `pop`,
+`stack`) is **partly** met: `new`, `push`, `pop` and `stack` are live;
+`interpret` is absent rather than stubbed, so no caller can mistake a
+placeholder for a working interpreter.
+
+```js
+const k = new Keel();
+k.push(20); k.push(22);
+const body = k.compile([Keel.primitive("+"), Keel.primitive("exit")]);
+k.run(body);
+k.stack();   // [42]
+```
+
+## Editor support
+
+[`editors/emacs/`](editors/emacs/) holds an Emacs package for driving the wasm
+keel while working through examples.
+
+## Milestones
+
+M2 native keel (this repo) → M3 frames on the native keel, sea-trials layer 0 →
+M4 wasm32 + node runner → M5 ClojureScript host. The full sequence and its
+gating are in the spec.
