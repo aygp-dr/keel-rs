@@ -1,0 +1,35 @@
+Timeline
+- The WAForth VS Code extension turned out to be far smaller than the
+  brief assumed: one command (waforth-notebook.new), no keybindings, no
+  REPL, no stack view, no evaluate-selection. Its whole surface is a
+  .wafnb notebook serializer. So the design took its notebook idea into
+  Org Babel and rejected what did not exist; the README records both
+  lists.
+- Rejected its stateless cell execution deliberately: both of its
+  notebook controllers give each cell a fresh VM, which for keel would
+  discard the stack and dictionary.
+- Failure: define-error's third argument is PARENT, not a docstring;
+  passing one raised "Wrong type argument: symbolp".
+- Failure: two ERT tests failed on a hand-compiled thread, returning a
+  return-stack address instead of a value. Cause: the bridge's compile
+  op stored xts verbatim while only eval appended exit, so the thread
+  ran off into the following dictionary cells. keel::Vm::compile stores
+  exactly what it is given, so appending exit is a correctness
+  requirement; both ops now share compileThread.
+- Failure in an authored example: an Org block called keel-reset inside
+  a mapcar, rewinding HERE and invalidating the compiled body. Found
+  only because every #+RESULTS: was regenerated rather than trusted.
+
+Reproduction
+- Command: gmake -C editors/emacs compile && gmake -C editors/emacs test
+- Output: byte-compile with byte-compile-error-on-warn t emits no
+  diagnostics; "Ran 42 tests, 42 results as expected, 0 unexpected".
+  With keel-wasm-package-directory pointed at a nonexistent path: 23 as
+  expected, 19 skipped, exit 0.
+- Independently checked the wire protocol by driving the bridge by hand:
+  hello reports all thirteen xts and capabilities.interpret false;
+  eval with program [push 2, push 3, thread [5]] leaves stack [5]; with
+  [push 72, thread [9], push 105, thread [9]] output is "Hi".
+- Cell: nexus, FreeBSD 15.1-RELEASE amd64, node v24.14.1, wasm-pack
+  0.14.0 with wasm-opt from binaryen-129, keel_wasm_bg.wasm 30245
+  bytes.
