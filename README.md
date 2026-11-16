@@ -66,6 +66,14 @@ Requires Rust 1.74+. For the wasm target: `rustup target add
 wasm32-unknown-unknown` (the FreeBSD `rust` package already bundles it, so
 `rustup` is not needed there). CI runs all of the above on every push.
 
+`keel/tests/properties.rs` holds property tests with
+[Hegel](https://antithesis.com/blog/2026/hegel/) (`hegeltest`, a dev-dependency
+only; the kernel stays dependency-free): each arithmetic primitive against exact
+integer arithmetic, and a state machine that keeps the data stack equal to a
+`Vec` model after every step, errors included. The pattern, and the rule that
+state-machine invariants are `always_run`, come from oxidecomputer/iddqd.
+Running them needs Rust 1.86+ (hegeltest's floor).
+
 Two of those need a newer toolchain than the build does. The clippy gate
 fails on clippy 1.89 with `unknown lint: clippy::manual_is_multiple_of` (the
 `#[allow]` in `keel/src/lib.rs` names a lint 1.89 does not have, and `-D

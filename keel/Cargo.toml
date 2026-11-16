@@ -7,3 +7,11 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+
+# Property tests only (keel/tests/properties.rs). The kernel itself stays
+# dependency-free; hegeltest needs Rust 1.86+, the kernel 1.74+.
+# static-engine links the Hypothesis-derived engine in rather than loading it
+# at run time.
+[dev-dependencies]
+hegeltest = { version = "0.52", features = ["static-engine"] }
+
