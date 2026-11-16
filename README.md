@@ -66,6 +66,24 @@ Requires Rust 1.74+. For the wasm target: `rustup target add
 wasm32-unknown-unknown` (the FreeBSD `rust` package already bundles it, so
 `rustup` is not needed there). CI runs all of the above on every push.
 
+Two of those need a newer toolchain than the build does. The clippy gate
+fails on clippy 1.89 with `unknown lint: clippy::manual_is_multiple_of` (the
+`#[allow]` in `keel/src/lib.rs` names a lint 1.89 does not have, and `-D
+warnings` makes that an error), and installing `wasm-pack` needs rustc 1.91
+or newer. Both pass on 1.100.
+
+On macOS (verified 2026-11-15, macOS 15.1 arm64, Rust 1.100): `cargo fmt`,
+`cargo clippy`, `cargo test --all` (26 tests) and the wasm32 release build
+all pass. For the Node build that `editors/emacs` and forth-keel's
+experiments 008-010 load:
+
+```sh
+rustup update stable
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack --locked     # --locked: newer deps need a newer rustc
+wasm-pack build keel-wasm --target nodejs --out-dir pkg
+```
+
 ## What is not here yet
 
 There is deliberately **no text interpreter and no `interpret` export.** Turning

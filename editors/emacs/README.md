@@ -191,7 +191,7 @@ with `fs.readFileSync` and instantiates it synchronously. Nothing is fetched.
 ## Install
 
 Requires Emacs 29.1+ and Node. Tested on FreeBSD 15.1 with Emacs 30.2 and
-Node v24.14.1.
+Node v24.14.1, and on macOS 15.1 (arm64) with Emacs 32.0.50 and Node v26.2.0.
 
 ```elisp
 (add-to-list 'load-path "/path/to/keel-rs/editors/emacs")
@@ -227,7 +227,11 @@ this command for you if the artifact is missing, and `keel-build-command`
 returns it.
 
 **This works on FreeBSD 15.1 and was verified here** (wasm-pack 0.14.0,
-`wasm-opt` from the `binaryen` package, 0.65 s). Two caveats:
+`wasm-opt` from the `binaryen` package, 0.65 s). It also works on macOS 15.1
+(arm64): wasm-pack 0.15.1 (`cargo install wasm-pack --locked`, which needs
+rustc 1.91+), 9.5 s for a first build; `gmake test` 42/42 against it. The
+targets here use plain tabs, so macOS's own `make` 3.81 runs them too. Two
+caveats:
 
 * `pkg/` is generated and gitignored (wasm-pack writes a `.gitignore`
   containing `*`), so a fresh clone has no artifact and you must run the build.
