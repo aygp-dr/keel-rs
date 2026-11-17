@@ -39,6 +39,7 @@ pub enum Error {
     QuotientOverflow,
     DictionaryFull,
     StepLimit,
+    BadSnapshot,
 }
 
 impl fmt::Display for Error {
@@ -54,6 +55,7 @@ impl fmt::Display for Error {
             Error::QuotientOverflow => write!(f, "quotient does not fit in a cell"),
             Error::DictionaryFull => write!(f, "dictionary full"),
             Error::StepLimit => write!(f, "step limit reached"),
+            Error::BadSnapshot => write!(f, "snapshot does not match this kernel"),
         }
     }
 }
@@ -423,6 +425,74 @@ impl Vm {
         out
     }
 
+    /// The return stack, bottom first and top last.
+    pub fn rstack(&self) -> Vec<Cell> {
+        let mut out = Vec::new();
+        let mut a = self.layout.return_stack_top();
+        while a > self.rp {
+            a -= CELL;
+            out.push(self.fetch(a).unwrap_or(0));
+        }
+        out
+    }
+
+    // ---- snapshots -------------------------------------------------------
+
+    /// The whole machine as bytes: memory, the four registers, the run flag,
+    /// and the input and output buffers. Restoring it and stepping on must
+    /// give exactly what stepping on from here would have given; that is the
+    /// property deterministic simulation testing replays from.
+    pub fn snapshot(&self) -> Vec<u8> {
+        let mut b = Vec::with_capacity(self.mem.len() + self.input.len() + self.output.len() + 40);
+        b.extend_from_slice(SNAPSHOT_MAGIC);
+        b.extend_from_slice(&self.layout.end.to_le_bytes());
+        b.extend_from_slice(&self.mem);
+        for r in [self.sp, self.rp, self.ip, self.rp_floor] {
+            b.extend_from_slice(&r.to_le_bytes());
+        }
+        b.push(self.running as u8);
+        b.extend_from_slice(&(self.in_pos as u32).to_le_bytes());
+        for buf in [&self.input, &self.output] {
+            b.extend_from_slice(&(buf.len() as u32).to_le_bytes());
+            b.extend_from_slice(buf);
+        }
+        b
+    }
+
+    /// Put back a [`Vm::snapshot`] taken from a kernel with the same layout.
+    pub fn restore(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        let mut r = Reader { b: bytes, at: 0 };
+        if r.take(SNAPSHOT_MAGIC.len())? != SNAPSHOT_MAGIC || r.u32()? != self.layout.end {
+            return Err(Error::BadSnapshot);
+        }
+        let mem = r.take(self.mem.len())?.to_vec();
+        let (sp, rp, ip, rp_floor) = (r.u32()?, r.u32()?, r.u32()?, r.u32()?);
+        let running = r.take(1)?[0] != 0;
+        let in_pos = r.u32()? as usize;
+        let n = r.u32()? as usize;
+        let input = r.take(n)?.to_vec();
+        let n = r.u32()? as usize;
+        let output = r.take(n)?.to_vec();
+        if r.at != bytes.len() || in_pos > input.len() {
+            return Err(Error::BadSnapshot);
+        }
+        self.mem = mem;
+        (self.sp, self.rp, self.ip, self.rp_floor) = (sp, rp, ip, rp_floor);
+        self.running = running;
+        (self.input, self.in_pos, self.output) = (input, in_pos, output);
+        Ok(())
+    }
+
+    /// FNV-1a over [`Vm::snapshot`]: two kernels with equal fingerprints are,
+    /// to within a hash collision, in the same state.
+    pub fn fingerprint(&self) -> u64 {
+        self.snapshot()
+            .iter()
+            .fold(0xcbf2_9ce4_8422_2325u64, |h, &b| {
+                (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3)
+            })
+    }
+
     // ---- input and output ------------------------------------------------
 
     pub fn set_input(&mut self, bytes: &[u8]) {
@@ -465,12 +535,25 @@ impl Vm {
         self.execute_xt(xt)
     }
 
-    /// Run the thread at `body` until its final `exit`, and return the number
-    /// of tokens executed. `max_steps` bounds a runaway loop.
-    pub fn run(&mut self, body: UCell, max_steps: u64) -> Result<u64, Error> {
+    /// Start a run of the thread at `body` without executing anything, so a
+    /// host can drive it one [`Vm::step`] at a time. [`Vm::run`] is `begin`
+    /// followed by stepping until the thread's final `exit`.
+    pub fn begin(&mut self, body: UCell) {
         self.ip = body;
         self.rp_floor = self.rp;
         self.running = true;
+    }
+
+    /// Whether the run started by [`Vm::begin`] has not yet reached its final
+    /// `exit`. An error leaves it set: the run did not finish, it stopped.
+    pub fn running(&self) -> bool {
+        self.running
+    }
+
+    /// Run the thread at `body` until its final `exit`, and return the number
+    /// of tokens executed. `max_steps` bounds a runaway loop.
+    pub fn run(&mut self, body: UCell, max_steps: u64) -> Result<u64, Error> {
+        self.begin(body);
         let mut n = 0u64;
         while self.running {
             if n >= max_steps {
@@ -584,6 +667,28 @@ impl Vm {
                 self.push(q as UCell as Cell)
             }
         }
+    }
+}
+
+const SNAPSHOT_MAGIC: &[u8] = b"KEELSNAP1";
+
+struct Reader<'a> {
+    b: &'a [u8],
+    at: usize,
+}
+
+impl<'a> Reader<'a> {
+    fn take(&mut self, n: usize) -> Result<&'a [u8], Error> {
+        let end = self.at.checked_add(n).ok_or(Error::BadSnapshot)?;
+        let s = self.b.get(self.at..end).ok_or(Error::BadSnapshot)?;
+        self.at = end;
+        Ok(s)
+    }
+
+    fn u32(&mut self) -> Result<u32, Error> {
+        let mut w = [0u8; 4];
+        w.copy_from_slice(self.take(4)?);
+        Ok(u32::from_le_bytes(w))
     }
 }
 
