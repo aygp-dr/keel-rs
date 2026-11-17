@@ -150,7 +150,7 @@ reruns a range.
 Divergence classes:
 
 | class         | meaning                                                         | kind          |
-|---------------+-----------------------------------------------------------------+---------------|
+|---|---|---|
 | `state`       | registers, a stack or output differ after a successful step     | kernel bug    |
 | `memory`      | memory differs at the end                                       | kernel bug    |
 | `error-vs-ok` | one side errored, the other did not                             | kernel bug    |
