@@ -72,6 +72,90 @@ impl Keel {
         self.vm.output_string()
     }
 
+    /// Start a run of the thread at `body` without executing anything; drive
+    /// it with `step`.
+    pub fn begin(&mut self, body: UCell) {
+        self.vm.begin(body);
+    }
+
+    /// Execute one token of the run started by `begin`. Returns whether the
+    /// run is still going; an error is thrown with the kernel's message.
+    pub fn step(&mut self) -> Result<bool, JsValue> {
+        self.vm.step().map_err(err)?;
+        Ok(self.vm.running())
+    }
+
+    /// Whether the run started by `begin` has not reached its final `exit`.
+    pub fn running(&self) -> bool {
+        self.vm.running()
+    }
+
+    /// The instruction pointer: the address of the next token.
+    pub fn ip(&self) -> UCell {
+        self.vm.ip()
+    }
+
+    /// The data stack pointer.
+    pub fn sp(&self) -> UCell {
+        self.vm.sp()
+    }
+
+    /// The return stack pointer.
+    pub fn rp(&self) -> UCell {
+        self.vm.rp()
+    }
+
+    /// The return stack, bottom first and top last.
+    pub fn rstack(&self) -> Vec<Cell> {
+        self.vm.rstack()
+    }
+
+    /// One cell of memory.
+    pub fn fetch(&self, addr: UCell) -> Result<Cell, JsValue> {
+        self.vm.fetch(addr).map_err(err)
+    }
+
+    /// Bytes that `key` will read, exactly; `setInput` takes text and so
+    /// cannot carry bytes that are not UTF-8.
+    #[wasm_bindgen(js_name = setInputBytes)]
+    pub fn set_input_bytes(&mut self, bytes: Vec<u8>) {
+        self.vm.set_input(&bytes);
+    }
+
+    /// Everything `emit` has written, as bytes; `output` decodes it as UTF-8
+    /// and replaces what is not.
+    #[wasm_bindgen(js_name = outputBytes)]
+    pub fn output_bytes(&self) -> Vec<u8> {
+        self.vm.output().to_vec()
+    }
+
+    /// The whole machine as bytes; `restore` puts it back.
+    pub fn snapshot(&self) -> Vec<u8> {
+        self.vm.snapshot()
+    }
+
+    /// Put back a `snapshot` from a kernel with the same memory map.
+    pub fn restore(&mut self, bytes: Vec<u8>) -> Result<(), JsValue> {
+        self.vm.restore(&bytes).map_err(err)
+    }
+
+    /// A 64-bit hash of the whole machine state, as 16 hex digits.
+    pub fn fingerprint(&self) -> String {
+        format!("{:016x}", self.vm.fingerprint())
+    }
+
+    /// The ceiling on tokens one `run` may execute.
+    #[wasm_bindgen(js_name = setStepLimit)]
+    pub fn set_step_limit(&mut self, limit: u32) {
+        self.step_limit = limit as u64;
+    }
+
+    /// Region boundaries, low to high: sys, tib, dict, from-space, to-space,
+    /// data stack, return stack, end.
+    pub fn boundaries(&self) -> Vec<UCell> {
+        self.vm.layout.boundaries().to_vec()
+    }
+
     /// Clear the stacks and buffers; the dictionary is kept.
     pub fn reset(&mut self) {
         self.vm.reset();

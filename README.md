@@ -123,3 +123,50 @@ keel while working through examples.
 M2 native keel (this repo) → M3 frames on the native keel, sea-trials layer 0 →
 M4 wasm32 + node runner → M5 ClojureScript host. The full sequence and its
 gating are in the spec.
+
+## Deterministic simulation harness
+
+`harness/` runs seeded cases against the keel compiled to wasm and against an
+independent JavaScript model of the thirteen primitives (written from the
+Forth-2012 definitions and the keel's primitive contracts, not from the Rust),
+comparing them after every step. A case is a seed: the cells on the data
+stack, the bytes `key` reads, a few threads of execution tokens, and the runs
+(threads run one after another on the same machine, so a run that errors
+leaves its return frames for the next). Each case is also replayed for
+determinism: the same case must end in the same fingerprint, and a snapshot
+taken mid-run must restore, in the same kernel or a fresh one, to the same end.
+
+```sh
+wasm-pack build keel-wasm --target web --out-dir ../harness/pkg --no-typescript
+node harness/cli.mjs --cases 2000            # exits 1 on a kernel bug
+python3 -m http.server -d harness 8770        # then open http://127.0.0.1:8770/
+```
+
+The page shows outcomes and divergence classes for a range of seeds, and for
+any case a step scrubber with the keel and the model side by side, the thread
+with the current token marked, and a shrinker. `#seed=1&cases=500` in the URL
+reruns a range.
+
+Divergence classes:
+
+| class         | meaning                                                         | kind          |
+|---|---|---|
+| `state`       | registers, a stack or output differ after a successful step     | kernel bug    |
+| `memory`      | memory differs at the end                                       | kernel bug    |
+| `error-vs-ok` | one side errored, the other did not                             | kernel bug    |
+| `replay`      | the same case ended in two different fingerprints               | kernel bug    |
+| `restore`     | a restored snapshot did not finish as the straight run did      | kernel bug    |
+| `after-error` | both errored, but the keel had already changed the stacks       | spec question |
+| `error-kind`  | both errored, with different errors                             | spec question |
+
+Findings so far (seeds 1..2000, no kernel bugs; three planted faults, a
+saturating `+`, a lost `um*` carry and an early `exit`, are each caught):
+
+- Errors are not atomic: a primitive that fails has usually popped its
+  operands already (`0 ! exit` leaves an empty stack). The spec does not say
+  whether a failed primitive may change the stacks.
+- `um/mod` checks the divisor before the depth, so `-1 0= um/mod` with too few
+  cells reports "divide by zero", not "data stack underflow".
+- An error leaves the run flag set, so a snapshot taken after an error cannot
+  be told from a live run: restoring it and stepping executes past the error.
+

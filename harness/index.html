@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>keel harness</title>
+<style>
+:root {
+  --bg: #f4f5f7; --panel: #fff; --ink: #18212b; --muted: #5f6c79; --line: #d6dce2;
+  --ok: #15803d; --ok-bg: #e7f6ec; --bug: #b91c1c; --bug-bg: #fde8e8; --q: #a15c07; --q-bg: #fdf1dc;
+  --cur: #1d4ed8; --cur-bg: #e3ebfd;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161b; --panel: #192028; --ink: #e3e8ed; --muted: #8b98a5; --line: #2c3743;
+    --ok: #4ade80; --ok-bg: #12301f; --bug: #f87171; --bug-bg: #3a1616; --q: #f5b14a; --q-bg: #3a2a10;
+    --cur: #93b4fd; --cur-bg: #1c2a4a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161b; --panel: #192028; --ink: #e3e8ed; --muted: #8b98a5; --line: #2c3743;
+  --ok: #4ade80; --ok-bg: #12301f; --bug: #f87171; --bug-bg: #3a1616; --q: #f5b14a; --q-bg: #3a2a10;
+  --cur: #93b4fd; --cur-bg: #1c2a4a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); }
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 18px; margin: 0 0 4px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+label { color: var(--muted); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+input[type=number] { width: 7em; font: 13px var(--mono); padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
+button { font: 13px var(--sans); padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+button:disabled { opacity: .5; cursor: default; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.tile b { display: block; font: 600 20px var(--mono); }
+.tile span { color: var(--muted); font-size: 12px; }
+.tile.bug { background: var(--bug-bg); border-color: var(--bug); } .tile.bug b { color: var(--bug); }
+.tile.q { background: var(--q-bg); border-color: var(--q); } .tile.q b { color: var(--q); }
+.tile.ok b { color: var(--ok); }
+.bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line); margin-top: 8px; }
+.bar i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+.cases { max-height: 520px; overflow: auto; font: 12px var(--mono); }
+.case { display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+.case:hover, .case.sel { background: var(--cur-bg); }
+.chip { font: 600 11px var(--mono); padding: 0 6px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.bug { color: var(--bug); } .chip.q { color: var(--q); } .chip.ok { color: var(--ok); } .chip.err { color: var(--muted); }
+pre, code { font: 12px var(--mono); }
+.thread { font: 12px var(--mono); display: flex; flex-wrap: wrap; gap: 2px 4px; margin: 2px 0 6px; }
+.thread .t { padding: 0 4px; border-radius: 3px; }
+.thread .t.cur { background: var(--cur-bg); color: var(--cur); outline: 1px solid var(--cur); }
+.side { display: grid; grid-template-columns: auto 1fr 1fr; gap: 2px 10px; font: 12px var(--mono); align-items: start; }
+.side .h { color: var(--muted); font: 600 11px var(--sans); text-transform: uppercase; }
+.side .k { color: var(--muted); }
+.side .v { overflow-wrap: anywhere; }
+.side .diff { background: var(--bug-bg); color: var(--bug); border-radius: 3px; padding: 0 3px; }
+input[type=range] { width: 100%; }
+.verdict { font: 13px var(--mono); padding: 6px 8px; border-radius: 6px; margin: 8px 0; }
+.verdict.bug { background: var(--bug-bg); color: var(--bug); }
+.verdict.q { background: var(--q-bg); color: var(--q); }
+.verdict.ok { background: var(--ok-bg); color: var(--ok); }
+.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>keel harness</h1>
+  <p class="sub">Deterministic simulation of the 13-primitive keel (Rust → wasm) against an independent JavaScript model. Every case is a seed.</p>
+
+  <section class="panel">
+    <div class="row">
+      <label>first seed <input id="seed" type="number" value="1" min="0"></label>
+      <label>cases <input id="cases" type="number" value="2000" min="1"></label>
+      <label>step limit <input id="limit" type="number" value="2000" min="1"></label>
+      <button id="go" class="primary">Run</button>
+      <span id="progress" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="summary" hidden>
+    <div class="tiles" id="tiles"></div>
+    <div class="bar" id="bar"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <div class="grid" id="work" hidden>
+    <section class="panel">
+      <h2>Cases <span id="filter" class="muted"></span></h2>
+      <div class="cases" id="list"></div>
+    </section>
+    <section class="panel" id="inspect">
+      <p class="muted">Pick a case.</p>
+    </section>
+  </div>
+</main>
+<script type="module" src="ui.mjs"></script>
+</body>
+</html>
