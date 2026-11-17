@@ -18,7 +18,8 @@ function kindOf(d) {
 }
 
 async function runAll() {
-  const seed0 = +$('seed').value, n = +$('cases').value, limit = +$('limit').value;
+  const int = (id, dflt) => { const v = parseInt($(id).value, 10); return Number.isFinite(v) && v > 0 ? v : dflt; };
+  const seed0 = Math.max(0, parseInt($('seed').value, 10) || 0), n = int('cases', 500), limit = int('limit', 2000);
   $('go').disabled = true;
   results = [];
   const t0 = performance.now();
@@ -159,5 +160,10 @@ function render(x, c, at) {
 
 $('go').addEventListener('click', runAll);
 const params = new URLSearchParams(location.hash.slice(1));
-for (const k of ['seed', 'cases', 'limit']) if (params.has(k)) $(k).value = params.get(k);
+// Whole numbers only: a link copied with trailing punctuation ("cases=500.")
+// would otherwise leave the box empty and run no cases at all.
+for (const k of ['seed', 'cases', 'limit']) {
+  const n = parseInt(params.get(k) ?? '', 10);
+  if (Number.isFinite(n) && n >= (k === 'seed' ? 0 : 1)) $(k).value = n;
+}
 if (location.hash) runAll();
